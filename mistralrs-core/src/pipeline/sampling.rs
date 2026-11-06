@@ -828,7 +828,13 @@ impl CausalLogitsBatch {
             Self::PerSequence(logits) => coalesce_batch_logits_to_cpu(logits),
             Self::Batched(logits) => {
                 let batch = logits.dim(0)?;
-                let logits = logits.to_device(&candle_core::Device::Cpu)?;
+                // Vulkan: leave rows on the device so greedy sampling can run there
+                // (the sampler reads the row back itself when it needs the host).
+                let logits = if logits.device().is_vulkan() {
+                    logits
+                } else {
+                    logits.to_device(&candle_core::Device::Cpu)?
+                };
                 (0..batch).map(|idx| logits.i(idx)).collect()
             }
         }

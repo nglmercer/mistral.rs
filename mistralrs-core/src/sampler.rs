@@ -2181,6 +2181,31 @@ impl Sampler {
             }
         }
 
+        // Vulkan greedy: argmax on the device, read back 4 bytes instead of the
+        // full logits row (mirrors the CUDA greedy path's preconditions).
+        #[cfg(feature = "vulkan")]
+        if logits.device().is_vulkan()
+            && !return_logprobs
+            && !sample_speculative
+            && !multiple_sequences
+            // top-1 sampling is argmax whatever the temperature
+            && (self.temperature.is_none() || self.top_k == 1)
+            && self.logits_processors.is_empty()
+            && self.logits_bias.is_empty()
+            && self.dry_params.as_ref().is_none_or(|p| p.multiplier == 0.0)
+            && self.frequency_penalty.unwrap_or(0.0) == 0.0
+            && self.presence_penalty.unwrap_or(0.0) == 0.0
+            && self.repetition_penalty.unwrap_or(1.0) == 1.0
+        {
+            let token = logits.flatten_all()?.argmax(0)?.to_scalar::<u32>()?;
+            return Ok(Logprobs {
+                token,
+                logprob: 0.0,
+                top_logprobs: None,
+                bytes: None,
+            });
+        }
+
         let logits = logits.to_vec1()?;
         let mut logits = self.apply_penalties(logits, context, prompt_len)?;
         for processor in &self.logits_processors {
