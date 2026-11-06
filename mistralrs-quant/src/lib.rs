@@ -13,6 +13,8 @@ use candle_core::{
 mod metal_fp8;
 #[cfg(feature = "metal")]
 pub mod metal_kernels;
+#[cfg(feature = "vulkan")]
+pub mod vulkan_norm;
 
 mod afq;
 mod bitsandbytes;

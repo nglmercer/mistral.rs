@@ -417,6 +417,16 @@ fn rms_norm_forward_add(
         }
     }
 
+    #[cfg(feature = "vulkan")]
+    if let Some((sum, Some(normed))) = mistralrs_quant::vulkan_norm::vulkan_residual_rms_norm(
+        x,
+        residual,
+        None,
+        Some((weight, eps as f32)),
+    )? {
+        return Ok((sum, normed));
+    }
+
     let sum = mistralrs_quant::elementwise::broadcast_add(x, residual)?;
     let normed = crate::ops::rms_norm(&sum, weight, eps as f32)?;
     Ok((sum, normed))
@@ -472,6 +482,18 @@ fn rms_norm_forward_residual(
         }
     }
 
+    #[cfg(feature = "vulkan")]
+    if scale.is_none() {
+        if let Some((out, _)) = mistralrs_quant::vulkan_norm::vulkan_residual_rms_norm(
+            x,
+            residual,
+            Some((weight, eps as f32)),
+            None,
+        )? {
+            return Ok(out);
+        }
+    }
+
     let normed = crate::ops::rms_norm(x, weight, eps as f32)?;
     let out = mistralrs_quant::elementwise::broadcast_add(residual, &normed)?;
     if let Some(scale) = scale {
@@ -511,6 +533,18 @@ fn rms_norm_forward_residual_then_rms_norm(
             residual_eps as f32,
             norm_eps as f32,
         );
+    }
+
+    #[cfg(feature = "vulkan")]
+    if scale.is_none() {
+        if let Some((xs, Some(normed))) = mistralrs_quant::vulkan_norm::vulkan_residual_rms_norm(
+            x,
+            residual,
+            Some((residual_weight, residual_eps as f32)),
+            Some((norm_weight, norm_eps as f32)),
+        )? {
+            return Ok((xs, normed));
+        }
     }
 
     let xs = rms_norm_forward_residual(x, residual, residual_weight, residual_eps, scale)?;
