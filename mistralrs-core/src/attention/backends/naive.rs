@@ -9,7 +9,9 @@ use crate::attention::{chunked_attention, SdpaParams};
 
 /// Not *really* sure why this is necessary but it is.
 pub(crate) fn maybe_synchronize(device: &Device) -> Result<()> {
-    if matches!(device, Device::Cpu) {
+    // Vulkan releases buffers when their batch completes; a drain per attention layer
+    // only stalls the pipeline (the BC-250 heap is always "< 4 GB available").
+    if matches!(device, Device::Cpu) || device.is_vulkan() {
         return Ok(());
     }
 
